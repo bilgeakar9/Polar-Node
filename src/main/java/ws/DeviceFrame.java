@@ -7,12 +7,14 @@ public class DeviceFrame {
     private final byte[] frame;
     private final boolean hasBattery;
 
+    private static int lastBatteryLevel = 100;
+
+    private String warning =" ";
+
 
     public DeviceFrame(
             int deviceId,           // uint16
             short temperature,      // int16
-            //boolean fanOn,          // uint8
-            // boolean heaterOn,       // uint8
 
             int fanState,
             int heaterState,
@@ -20,6 +22,7 @@ public class DeviceFrame {
             Integer batteryLevel,   // if null = yok
             int status               //bitmask
     ) {
+
         hasBattery = (batteryLevel != null);
 
 
@@ -41,10 +44,14 @@ public class DeviceFrame {
         frame[6] = (byte) heaterState;
 
         int statusIndex;
+
         if (hasBattery) {
             frame[7] = (byte) batteryLevel.intValue();
+            lastBatteryLevel= batteryLevel;
             statusIndex = 8;
-        } else {
+        }
+
+        else {
             statusIndex = 7;
         }
         frame[statusIndex] = (byte) status;
@@ -59,8 +66,6 @@ public class DeviceFrame {
     }
 
 
-
-    // ---- Constructor (parse received frame) ----
     public DeviceFrame(byte[] received) {
         if (received.length != 10 && received.length != 11) {
             throw new IllegalArgumentException("Invalid frame length");
@@ -80,6 +85,10 @@ public class DeviceFrame {
         if ((getStatus() & 0b1110_0000) != 0) {
             throw new IllegalArgumentException("Invalid status bits set");
         }
+
+        if (hasBattery) {
+            lastBatteryLevel = frame[7] & 0xFF;
+        }
     }
 
     // Getters, decode fields
@@ -94,14 +103,6 @@ public class DeviceFrame {
         return halfToFloat(half);
     }
 
-    public boolean isFanOn() {
-        return frame[5] > 0;
-    }
-
-    public boolean isHeaterOn() {
-        return frame[6] > 0;
-
-    }
 
     public int getFanLevel() {
         return frame[5];
@@ -111,28 +112,41 @@ public class DeviceFrame {
     public int getHeaterLevel() {
         return frame[6];
     }
-/////////
-    public int setFanLevel(int level) {
-        if (level < 0) level = 0;
-        if (level > 2) level = 2;
-        frame[5] = (byte) level;
-        return level;
+
+    public boolean isFanOn() {
+        return getFanLevel() > 0;
     }
 
-    public int setHeaterLevel(int level) {
-        if (level < 0) level = 0;
-        if (level > 2) level = 2;
-        frame[6] = (byte) level;
-        return level;
+    public boolean isHeaterOn() {
+        return getHeaterLevel() > 0;
     }
-////////
+
+    public int getBatteryLevel() {
+        return lastBatteryLevel;
+    }
+
     public boolean hasBattery() {
         return hasBattery;
     }
 
-    public int getBatteryLevel() {
-        return hasBattery() ? (frame[7] & 0xFF) : -1;
+    public void setWarning(String message) {
+        this.warning = message;
+    }
 
+    public String getWarning() {
+        return this.warning;
+    }
+
+    public void setFanLevel(int level) {
+        if (level < 0) level = 0;
+        if (level > 2) level = 2;
+        frame[5] = (byte) level;
+    }
+
+    public void setHeaterLevel(int level) {
+        if (level < 0) level = 0;
+        if (level > 2) level = 2;
+        frame[6] = (byte) level;
     }
 
     public int getStatus() {
@@ -140,6 +154,10 @@ public class DeviceFrame {
         return frame[statusIndex] & 0xFF;
     }
 
+    public void setStatus(int status) {
+        int statusIndex = hasBattery ? 8 : 7;
+        frame[statusIndex] = (byte) status;
+    }
 
     // CRC validation
     private boolean isChecksumValid() {
